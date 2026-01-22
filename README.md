@@ -1,6 +1,12 @@
 # PersonVLM: Lightweight Vision-Language Model for Real-Time Person Description
 
-A production-ready, parameter-efficient Vision-Language Model designed for generating structured natural language descriptions of person images in multi-camera video analytics systems.
+## Executive Summary
+
+**PersonVLM** is a lightweight (≤100M parameters) vision-language model designed to generate structured natural language descriptions of people from cropped images in real-time video analytics systems.
+
+The system is optimized for **scalability** across hundreds of camera streams, **low inference latency** (<50ms per image), and **cost-efficient deployment** on consumer-grade GPUs, while maintaining consistent and parseable outputs for downstream applications such as search, alerting, and forensic analysis.
+
+Key differentiator: Unlike large VLMs (7B+ parameters), PersonVLM achieves practical deployment constraints without sacrificing output quality for the narrow task of person description.
 
 ---
 
@@ -38,7 +44,7 @@ Existing approaches fall into two extremes:
 
 | Approach | Limitation |
 |----------|------------|
-| **Large VLMs (LLaVA, GPT-4V)** | 7B-70B parameters; impractical for real-time, multi-camera deployment |
+| **Large VLMs (e.g., LLaVA, Gemini, GPT-4V)** | 7B-70B parameters; impractical for real-time, multi-camera deployment |
 | **Attribute classifiers** | Fixed taxonomy; cannot handle novel combinations or natural language output |
 
 ### Our Goal
@@ -70,6 +76,8 @@ The following constraints shaped every architectural decision:
 | **Training Cost** | Minimal manual annotation | Uses pseudo-labeling to scale data generation |
 | **Scalability** | Event-driven, stateless inference | Horizontal scaling across camera feeds |
 
+*Note: All latency and throughput numbers throughout this document are indicative estimates based on internal benchmarks and may vary depending on hardware configuration and deployment conditions.*
+
 ---
 
 ## Solution Approach
@@ -79,7 +87,7 @@ The following constraints shaped every architectural decision:
 | Option | Why Not Suitable |
 |--------|------------------|
 | **Fine-tune LLaVA-7B** | 7B parameters is 70x our budget; inference latency ~500ms |
-| **Distill from GPT-4V** | Output distribution too complex for small models to match |
+| **Distill from large VLMs** | Output distribution too complex for small models to match |
 | **Train attribute classifier** | Cannot produce natural language; limited to predefined classes |
 | **Use CLIP + template** | CLIP embeddings lack fine-grained clothing/action details |
 
@@ -93,7 +101,7 @@ We build a **purpose-built VLM** optimized for the narrow task of person descrip
 
 3. **Constrain the output vocabulary** - ~1000 tokens covering clothing, colors, objects, and actions; prevents hallucination and ensures structured output
 
-4. **Generate pseudo ground-truth at scale** - Use Gemini/GPT-4V with strict prompts to generate training captions; filter by confidence and consistency
+4. **Generate pseudo ground-truth at scale** - Use large commercial VLMs (e.g., Gemini) with strict prompts to generate training captions; filter by confidence and consistency
 
 This approach achieves the expressiveness of a VLM with the efficiency of a specialized classifier.
 
@@ -226,7 +234,7 @@ flowchart LR
     end
 
     subgraph Generation["Caption Generation"]
-        API[Gemini / GPT-4V API]
+        API[Large VLM API]
         PROMPT["Structured Prompt"]
     end
 
@@ -715,6 +723,8 @@ On held-out validation set (pseudo-labeled):
 | Exact Match (clothing) | 78% |
 | Exact Match (color) | 72% |
 | Exact Match (action) | 81% |
+
+*Note: Captioning metrics (BLEU, CIDEr) are used only as development proxies. Exact-match accuracy on structured attributes (clothing, color, action) is the primary evaluation signal for this task.*
 
 ---
 
