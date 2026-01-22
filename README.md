@@ -771,7 +771,3 @@ person_vlm/
 MIT License - see LICENSE file for details.
 
 ---
-
-## Contact
-
-For questions or collaboration inquiries, please open an issue or contact the maintainer.
