@@ -104,7 +104,7 @@ This approach achieves the expressiveness of a VLM with the efficiency of a spec
 ### High-Level System Flow
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0', 'secondaryColor': '#81c784', 'tertiaryColor': '#fff59d'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart TB
     subgraph Input["Input Sources"]
         C1[Camera 1]
@@ -140,7 +140,7 @@ flowchart TB
 ### Model Architecture
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart TB
     subgraph Input["Input"]
         IMG[/"Person Crop (224 × 224 × 3)"/]
@@ -158,7 +158,7 @@ flowchart TB
     end
 
     subgraph Projection["Projection Layer - 0.5M params"]
-        MLP["MLP (256 → 512 → 2048)"]
+        MLP["MLP (256 to 512 to 2048)"]
         RESHAPE["Reshape to 8 Visual Tokens"]
         
         MLP --> RESHAPE
@@ -181,7 +181,7 @@ flowchart TB
 
     IMG --> Vision
     Vision -->|"256-dim features"| Projection
-    Projection -->|"8 × 256 tokens"| Decoder
+    Projection -->|"8 x 256 tokens"| Decoder
     Decoder --> DESC
 ```
 
@@ -212,7 +212,7 @@ pie title Parameter Distribution (~30M Total)
 Manual annotation of person descriptions is expensive and does not scale. We leverage large vision-language models to generate training data automatically.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart LR
     subgraph Sources["Data Sources"]
         COCO[(COCO Dataset)]
@@ -275,7 +275,7 @@ VOCABULARY (use only these terms):
 ### Quality Filtering Pipeline
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart LR
     RAW["Raw Captions (N samples)"] --> C1{"Confidence ≥ 0.6?"}
     C1 -->|Yes| C2{"Contains 'wearing'?"}
@@ -344,7 +344,7 @@ Unlike general-purpose LLMs, our decoder is optimized for short, structured outp
 ### Freeze vs. Train Decision
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart LR
     subgraph Vision["Vision Encoder (2.3M params)"]
         direction TB
@@ -420,7 +420,7 @@ xychart-beta
 PersonVLM is designed for event-driven inference, not continuous video processing:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
+%%{init: {'theme': 'dark'}}%%
 flowchart TB
     subgraph Cameras["Camera Feeds"]
         C1[Camera 1]
