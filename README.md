@@ -63,7 +63,7 @@ The following constraints shaped every architectural decision:
 
 | Constraint | Requirement | Rationale |
 |------------|-------------|-----------|
-| **Parameter Budget** | ≤100M total parameters | Enables deployment on edge GPUs (Jetson, T4) and reduces inference cost |
+| **Parameter Budget** | ≤100M total parameters | Enables deployment on consumer/edge GPUs and reduces inference cost |
 | **Inference Latency** | <50ms per image | Supports real-time processing at 20+ FPS |
 | **Memory Footprint** | <4GB GPU memory | Allows multi-model deployment on single GPU |
 | **Output Format** | Structured, controlled vocabulary | Ensures parseability for downstream systems |
@@ -456,17 +456,17 @@ flowchart TB
     W1 & W2 & W3 & W4 --> DB
 ```
 
-### Scalability Characteristics
+### Scalability Characteristics (Estimated)
 
-| Metric | Single GPU (T4) | Single GPU (A100) | Multi-GPU (4x T4) |
-|--------|-----------------|-------------------|-------------------|
-| Batch Size | 32 | 128 | 32 × 4 |
-| Throughput | ~400 img/sec | ~1500 img/sec | ~1600 img/sec |
-| Latency (p50) | 8 ms | 3 ms | 8 ms |
-| Latency (p99) | 15 ms | 6 ms | 20 ms |
-| Camera Capacity* | ~200 cameras | ~800 cameras | ~800 cameras |
+| Metric | Apple Silicon (M4) | Tesla V100 (32GB) | Multi-GPU |
+|--------|---------------------|-------------------|-----------|
+| Batch Size | 16-32 | 64-128 | 32 × N |
+| Throughput | ~150-250 img/sec | ~600-800 img/sec | Scales linearly |
+| Latency (p50) | ~15 ms | ~5 ms | ~5-15 ms |
+| Latency (p99) | ~25 ms | ~10 ms | ~15-25 ms |
+| Camera Capacity* | ~75-125 cameras | ~300-400 cameras | ~400+ cameras |
 
-*Assuming 2 descriptions per camera per second
+*Assuming 2 descriptions per camera per second. Values are estimates; actual performance depends on model configuration and system load.
 
 ### Batch Processing Strategy
 
@@ -590,8 +590,10 @@ gantt
 
 - Python 3.8+
 - PyTorch 2.0+
-- CUDA 11.8+ (for GPU training)
-- 8GB+ GPU memory (training), 4GB+ (inference)
+- GPU Support (one of the following):
+  - **Apple Silicon (M1/M2/M3/M4)**: MPS backend (built into PyTorch 2.0+)
+  - **NVIDIA GPU**: CUDA 11.8+ (Tesla V100, RTX series, etc.)
+- 8GB+ unified/GPU memory (training), 4GB+ (inference)
 
 ### Installation
 
@@ -679,7 +681,7 @@ print(f"Confidence: {result['confidence']:.2f}")
 
 | Configuration | Parameters | Checkpoint | GPU Memory | Use Case |
 |---------------|------------|------------|------------|----------|
-| Ultra-Light | 15M | 60 MB | 1.2 GB | Edge devices (Jetson) |
+| Ultra-Light | 15M | 60 MB | 1.2 GB | Edge/mobile devices |
 | **Balanced** | **30M** | **120 MB** | **2.1 GB** | **Production (recommended)** |
 | Quality | 50M | 200 MB | 3.5 GB | Accuracy-critical applications |
 
@@ -687,18 +689,20 @@ print(f"Confidence: {result['confidence']:.2f}")
 
 ```mermaid
 xychart-beta
-    title "Throughput vs Batch Size (NVIDIA T4)"
+    title "Throughput vs Batch Size (Representative)"
     x-axis "Batch Size" [1, 8, 16, 32, 64]
     y-axis "Images per Second" 0 --> 450
     bar [118, 317, 380, 409, 425]
 ```
 
+*Note: Actual throughput varies by hardware. Apple Silicon M4 may achieve 60-70% of these values; V100 may exceed them.*
+
 | Batch Size | Latency (ms) | Throughput (img/sec) |
 |------------|--------------|----------------------|
-| 1 | 8.5 | 118 |
-| 8 | 25.2 | 317 |
-| 16 | 42.1 | 380 |
-| 32 | 78.3 | 409 |
+| 1 | ~8-15 | ~80-150 |
+| 8 | ~20-35 | ~200-400 |
+| 16 | ~35-55 | ~250-450 |
+| 32 | ~60-100 | ~300-500 |
 
 ### Accuracy Metrics
 
