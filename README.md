@@ -104,6 +104,7 @@ This approach achieves the expressiveness of a VLM with the efficiency of a spec
 ### High-Level System Flow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0', 'secondaryColor': '#81c784', 'tertiaryColor': '#fff59d'}}}%%
 flowchart TB
     subgraph Input["Input Sources"]
         C1[Camera 1]
@@ -134,21 +135,18 @@ flowchart TB
     T1 -->|Person Crops| Q
     Q --> W1 & W2 & WN
     W1 & W2 & WN -->|Descriptions| SI & AS & DB
-
-    style VLM fill:#e1f5fe
-    style Detection fill:#fff3e0
-    style Output fill:#e8f5e9
 ```
 
 ### Model Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
 flowchart TB
     subgraph Input["Input"]
-        IMG[/"Person Crop<br/>(224 × 224 × 3)"/]
+        IMG[/"Person Crop (224 × 224 × 3)"/]
     end
 
-    subgraph Vision["Vision Encoder (MobileViT-XS)"]
+    subgraph Vision["Vision Encoder - MobileViT-XS - 2.3M params"]
         direction TB
         CONV[Conv Stem]
         MB1[MobileViT Block 1]
@@ -159,36 +157,32 @@ flowchart TB
         CONV --> MB1 --> MB2 --> MB3 --> POOL
     end
 
-    subgraph Projection["Projection Layer"]
-        MLP["MLP<br/>(256 → 512 → 2048)"]
-        RESHAPE["Reshape to<br/>8 Visual Tokens"]
+    subgraph Projection["Projection Layer - 0.5M params"]
+        MLP["MLP (256 → 512 → 2048)"]
+        RESHAPE["Reshape to 8 Visual Tokens"]
         
         MLP --> RESHAPE
     end
 
-    subgraph Decoder["Text Decoder (4-Layer Transformer)"]
+    subgraph Decoder["Text Decoder - 4-Layer Transformer - 15M params"]
         direction TB
-        L1["Layer 1<br/>Self-Attn + Cross-Attn + FFN"]
-        L2["Layer 2<br/>Self-Attn + Cross-Attn + FFN"]
-        L3["Layer 3<br/>Self-Attn + Cross-Attn + FFN"]
-        L4["Layer 4<br/>Self-Attn + Cross-Attn + FFN"]
+        L1["Layer 1: Self-Attn + Cross-Attn + FFN"]
+        L2["Layer 2: Self-Attn + Cross-Attn + FFN"]
+        L3["Layer 3: Self-Attn + Cross-Attn + FFN"]
+        L4["Layer 4: Self-Attn + Cross-Attn + FFN"]
         HEAD[Linear Head + Softmax]
         
         L1 --> L2 --> L3 --> L4 --> HEAD
     end
 
     subgraph Output["Output"]
-        DESC[/"male wearing blue jacket<br/>and gray pants, walking"/]
+        DESC[/"male wearing blue jacket and gray pants, walking"/]
     end
 
     IMG --> Vision
-    Vision -->|"256-dim<br/>features"| Projection
-    Projection -->|"8 × 256<br/>tokens"| Decoder
+    Vision -->|"256-dim features"| Projection
+    Projection -->|"8 × 256 tokens"| Decoder
     Decoder --> DESC
-
-    style Vision fill:#ffebee
-    style Projection fill:#e3f2fd
-    style Decoder fill:#f3e5f5
 ```
 
 ### Parameter Budget Breakdown
@@ -218,6 +212,7 @@ pie title Parameter Distribution (~30M Total)
 Manual annotation of person descriptions is expensive and does not scale. We leverage large vision-language models to generate training data automatically.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
 flowchart LR
     subgraph Sources["Data Sources"]
         COCO[(COCO Dataset)]
@@ -227,18 +222,18 @@ flowchart LR
     subgraph Extraction["Person Extraction"]
         DET[Person Detection]
         CROP[Crop Extraction]
-        FILTER1[Size Filter<br/>min 50×100px]
+        FILTER1["Size Filter: min 50×100px"]
     end
 
     subgraph Generation["Caption Generation"]
         API[Gemini / GPT-4V API]
-        PROMPT["Structured Prompt<br/>(clothing, color, action)"]
+        PROMPT["Structured Prompt"]
     end
 
     subgraph QA["Quality Assurance"]
-        CONF[Confidence Filter<br/>≥ 0.6]
-        STRUCT[Structure Check<br/>contains 'wearing']
-        LEN[Length Filter<br/>20-200 chars]
+        CONF["Confidence Filter ≥ 0.6"]
+        STRUCT["Structure Check"]
+        LEN["Length Filter 20-200"]
     end
 
     subgraph Output["Training Data"]
@@ -251,9 +246,6 @@ flowchart LR
     PROMPT -.-> API
     API --> CONF --> STRUCT --> LEN
     LEN --> TRAIN & VAL
-
-    style Generation fill:#fff3e0
-    style QA fill:#e8f5e9
 ```
 
 ### Caption Generation Prompt
@@ -283,22 +275,17 @@ VOCABULARY (use only these terms):
 ### Quality Filtering Pipeline
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
 flowchart LR
-    RAW[Raw Captions<br/>N samples] --> C1{Confidence<br/>≥ 0.6?}
-    C1 -->|Yes| C2{Contains<br/>'wearing'?}
-    C1 -->|No| REJ1[Rejected]
-    C2 -->|Yes| C3{Length<br/>20-200?}
-    C2 -->|No| REJ2[Rejected]
-    C3 -->|Yes| C4{Valid<br/>prefix?}
-    C3 -->|No| REJ3[Rejected]
-    C4 -->|Yes| PASS[Filtered Dataset<br/>~0.75N samples]
-    C4 -->|No| REJ4[Rejected]
-
-    style PASS fill:#c8e6c9
-    style REJ1 fill:#ffcdd2
-    style REJ2 fill:#ffcdd2
-    style REJ3 fill:#ffcdd2
-    style REJ4 fill:#ffcdd2
+    RAW["Raw Captions (N samples)"] --> C1{"Confidence ≥ 0.6?"}
+    C1 -->|Yes| C2{"Contains 'wearing'?"}
+    C1 -->|No| REJ1["REJECTED"]
+    C2 -->|Yes| C3{"Length 20-200?"}
+    C2 -->|No| REJ2["REJECTED"]
+    C3 -->|Yes| C4{"Valid prefix?"}
+    C3 -->|No| REJ3["REJECTED"]
+    C4 -->|Yes| PASS["PASSED (~0.75N samples)"]
+    C4 -->|No| REJ4["REJECTED"]
 ```
 
 Typical yield: 70-80% of raw captions pass all filters.
@@ -339,62 +326,16 @@ Unlike general-purpose LLMs, our decoder is optimized for short, structured outp
 
 ### Controlled Vocabulary Taxonomy
 
-```mermaid
-mindmap
-  root((Vocabulary<br/>~1000 tokens))
-    Subjects
-      person
-      male
-      female
-    Upper Clothing
-      shirt
-      t-shirt
-      jacket
-      coat
-      sweater
-      hoodie
-      blouse
-      vest
-    Lower Clothing
-      pants
-      jeans
-      shorts
-      skirt
-      trousers
-      dress
-    Colors
-      black
-      white
-      red
-      blue
-      green
-      gray
-      dark
-      light
-    Objects
-      phone
-      bag
-      backpack
-      bottle
-      umbrella
-      briefcase
-      laptop
-      nothing
-    Actions
-      standing
-      walking
-      running
-      sitting
-      waiting
-      talking
-    Accessories
-      glasses
-      sunglasses
-      hat
-      cap
-      mask
-      headphones
-```
+| Category | Tokens |
+|----------|--------|
+| **Subjects** | `person`, `male`, `female` |
+| **Upper Clothing** | `shirt`, `t-shirt`, `jacket`, `coat`, `sweater`, `hoodie`, `blouse`, `vest`, `top`, `polo` |
+| **Lower Clothing** | `pants`, `jeans`, `shorts`, `skirt`, `trousers`, `dress`, `sweatpants`, `leggings` |
+| **Colors** | `black`, `white`, `red`, `blue`, `green`, `yellow`, `gray`, `brown`, `dark`, `light`, `navy` |
+| **Objects** | `phone`, `bag`, `backpack`, `bottle`, `umbrella`, `briefcase`, `laptop`, `purse`, `nothing` |
+| **Actions** | `standing`, `walking`, `running`, `sitting`, `waiting`, `talking`, `looking`, `crossing` |
+| **Accessories** | `glasses`, `sunglasses`, `hat`, `cap`, `mask`, `headphones`, `watch`, `scarf` |
+| **Structural** | `wearing`, `and`, `holding`, `carrying`, `with`, `a`, `the`, `unknown` |
 
 ---
 
@@ -403,24 +344,20 @@ mindmap
 ### Freeze vs. Train Decision
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
 flowchart LR
-    subgraph Vision["Vision Encoder"]
+    subgraph Vision["Vision Encoder (2.3M params)"]
         direction TB
-        VE1["Early Layers<br/>90% FROZEN"]
-        VE2["Final Layers<br/>10% TRAINABLE"]
-        
-        style VE1 fill:#bbdefb
-        style VE2 fill:#c8e6c9
+        VE1["Early Layers - 90% FROZEN"]
+        VE2["Final Layers - 10% TRAINABLE"]
     end
 
-    subgraph Proj["Projection"]
-        P1["MLP<br/>100% TRAINABLE"]
-        style P1 fill:#c8e6c9
+    subgraph Proj["Projection (0.5M params)"]
+        P1["MLP - 100% TRAINABLE"]
     end
 
-    subgraph Dec["Text Decoder"]
-        D1["All Layers<br/>100% TRAINABLE"]
-        style D1 fill:#c8e6c9
+    subgraph Dec["Text Decoder (15M params)"]
+        D1["All Layers - 100% TRAINABLE"]
     end
 
     Vision --> Proj --> Dec
@@ -483,6 +420,7 @@ xychart-beta
 PersonVLM is designed for event-driven inference, not continuous video processing:
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5986', 'lineColor': '#5c6bc0'}}}%%
 flowchart TB
     subgraph Cameras["Camera Feeds"]
         C1[Camera 1]
@@ -493,7 +431,7 @@ flowchart TB
 
     subgraph Triggers["Event Triggers"]
         T1[New Track Created]
-        T2[Track Updated<br/>every N frames]
+        T2["Track Updated (every N frames)"]
         T3[Re-ID Request]
     end
 
@@ -502,10 +440,10 @@ flowchart TB
     end
 
     subgraph Workers["PersonVLM Worker Pool"]
-        W1["Worker 1<br/>(GPU 0)"]
-        W2["Worker 2<br/>(GPU 0)"]
-        W3["Worker 3<br/>(GPU 1)"]
-        W4["Worker N<br/>(GPU 1)"]
+        W1["Worker 1 (GPU 0)"]
+        W2["Worker 2 (GPU 0)"]
+        W3["Worker 3 (GPU 1)"]
+        W4["Worker N (GPU 1)"]
     end
 
     subgraph Storage["Description Store"]
@@ -516,9 +454,6 @@ flowchart TB
     T1 & T2 & T3 --> MQ
     MQ --> W1 & W2 & W3 & W4
     W1 & W2 & W3 & W4 --> DB
-
-    style Queue fill:#fff3e0
-    style Workers fill:#e3f2fd
 ```
 
 ### Scalability Characteristics
@@ -582,27 +517,23 @@ sequenceDiagram
 
 ### Scope Boundaries
 
-```mermaid
-flowchart LR
-    subgraph InScope["What PersonVLM Does"]
-        A1[Clothing Description]
-        A2[Color Identification]
-        A3[Object Detection<br/>carried items]
-        A4[Posture/Action]
-        A5[Gender<br/>when visible]
-    end
+**In Scope:**
+| Capability | Description |
+|------------|-------------|
+| Clothing Description | Upper and lower garment types |
+| Color Identification | Primary colors of clothing items |
+| Object Detection | Carried/held items (bag, phone, etc.) |
+| Posture/Action | Basic posture and movement |
+| Gender | When clearly visible |
 
-    subgraph OutScope["What PersonVLM Does NOT Do"]
-        B1[Face Recognition]
-        B2[Person Re-ID]
-        B3[Emotion Detection]
-        B4[Complex Actions]
-        B5[Scene Understanding]
-    end
-
-    style InScope fill:#c8e6c9
-    style OutScope fill:#ffcdd2
-```
+**Out of Scope:**
+| Capability | Reason |
+|------------|--------|
+| Face Recognition | Requires dedicated biometric model |
+| Person Re-ID | Separate embedding-based system |
+| Emotion Detection | Not reliable from clothing/posture |
+| Complex Actions | Beyond simple vocabulary |
+| Scene Understanding | Focus is on person, not environment |
 
 ---
 
