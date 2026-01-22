@@ -151,45 +151,51 @@ flowchart TB
 %%{init: {'theme': 'dark'}}%%
 flowchart TB
     subgraph Input["Input"]
-        IMG[/"Person Crop (224 × 224 × 3)"/]
+        IMG[/"Person Crop 224x224x3"/]
     end
 
-    subgraph Vision["Vision Encoder - MobileViT-XS - 2.3M params"]
+    subgraph Vision["Vision Encoder"]
         direction TB
+        VE_INFO["MobileViT-XS | 2.3M params"]
         CONV[Conv Stem]
         MB1[MobileViT Block 1]
         MB2[MobileViT Block 2]
         MB3[MobileViT Block 3]
         POOL[Global Pool]
         
+        VE_INFO ~~~ CONV
         CONV --> MB1 --> MB2 --> MB3 --> POOL
     end
 
-    subgraph Projection["Projection Layer - 0.5M params"]
-        MLP["MLP (256 to 512 to 2048)"]
-        RESHAPE["Reshape to 8 Visual Tokens"]
+    subgraph Projection["Projection"]
+        P_INFO["MLP | 0.5M params"]
+        MLP["256 -> 512 -> 2048"]
+        RESHAPE["8 Visual Tokens"]
         
+        P_INFO ~~~ MLP
         MLP --> RESHAPE
     end
 
-    subgraph Decoder["Text Decoder - 4-Layer Transformer - 15M params"]
+    subgraph Decoder["Text Decoder"]
         direction TB
-        L1["Layer 1: Self-Attn + Cross-Attn + FFN"]
-        L2["Layer 2: Self-Attn + Cross-Attn + FFN"]
-        L3["Layer 3: Self-Attn + Cross-Attn + FFN"]
-        L4["Layer 4: Self-Attn + Cross-Attn + FFN"]
-        HEAD[Linear Head + Softmax]
+        D_INFO["4-Layer Transformer | 15M params"]
+        L1["Layer 1: Self+Cross Attn"]
+        L2["Layer 2: Self+Cross Attn"]
+        L3["Layer 3: Self+Cross Attn"]
+        L4["Layer 4: Self+Cross Attn"]
+        HEAD[Linear Head]
         
+        D_INFO ~~~ L1
         L1 --> L2 --> L3 --> L4 --> HEAD
     end
 
     subgraph Output["Output"]
-        DESC[/"male wearing blue jacket and gray pants, walking"/]
+        DESC[/"person wearing blue jacket..."/]
     end
 
     IMG --> Vision
-    Vision -->|"256-dim features"| Projection
-    Projection -->|"8 x 256 tokens"| Decoder
+    Vision -->|"256-dim"| Projection
+    Projection -->|"8x256"| Decoder
     Decoder --> DESC
 ```
 
