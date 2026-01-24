@@ -73,7 +73,7 @@ The following constraints shaped every architectural decision:
 | **Inference Latency** | <50ms per image | Supports real-time processing at 20+ FPS |
 | **Memory Footprint** | <4GB GPU memory | Allows multi-model deployment on single GPU |
 | **Output Format** | Structured, controlled vocabulary | Ensures parseability for downstream systems |
-| **Training Cost** | Minimal manual annotation | Uses pseudo-labeling to scale data generation |
+| **Training Cost** | Minimal manual annotation | Uses pre-captioned datasets or pseudo-labeling |
 | **Scalability** | Event-driven, stateless inference | Horizontal scaling across camera feeds |
 
 *Note: All latency and throughput numbers throughout this document are indicative estimates based on internal benchmarks and may vary depending on hardware configuration and deployment conditions.*
@@ -99,9 +99,9 @@ We build a **purpose-built VLM** optimized for the narrow task of person descrip
 
 2. **Design a minimal text decoder** - For structured 20-40 word outputs, a 4-layer transformer decoder is sufficient; no need for LLM-scale language modeling
 
-3. **Constrain the output vocabulary** - ~1000 tokens covering clothing, colors, objects, and actions; prevents hallucination and ensures structured output
+3. **Constrain the output vocabulary** - ~3000 tokens covering clothing, colors, objects, and actions; prevents hallucination and ensures structured output
 
-4. **Generate pseudo ground-truth at scale** - Use large commercial VLMs (e.g., Gemini) with strict prompts to generate training captions; filter by confidence and consistency
+4. **Leverage pre-captioned datasets** - Use existing annotated person description datasets (e.g., MSP60k) or generate pseudo ground-truth using large commercial VLMs with strict prompts
 
 This approach achieves the expressiveness of a VLM with the efficiency of a specialized classifier.
 
@@ -202,107 +202,99 @@ flowchart TB
 ### Parameter Budget Breakdown
 
 ```mermaid
-pie title Parameter Distribution (~30M Total)
-    "Text Decoder" : 50
-    "Embeddings (Tied)" : 40
-    "Vision Encoder" : 8
-    "Projection Layer" : 2
+pie title Parameter Distribution (~7.2M Total)
+    "Vision Encoder" : 32
+    "Text Decoder" : 30
+    "Embeddings (Tied)" : 23
+    "Projection Layer" : 15
 ```
 
 | Component | Configuration | Parameters | % of Total | Trainable |
 |-----------|---------------|------------|------------|-----------|
-| Vision Encoder | MobileViT-XS | 2.3M | 8% | 10% (~230K) |
-| Projection Layer | MLP 256→512→2048 | 0.5M | 2% | 100% |
-| Text Decoder | 4 layers, 256 dim | 15M | 50% | 100% |
-| Embeddings | Vocab ~1000, tied | 12M | 40% | 100% |
-| **Total** | | **~30M** | 100% | ~28M |
+| Vision Encoder | MobileViT-XS | 2.3M | 32% | 10% (~230K) |
+| Projection Layer | MLP 256→512→256 | 1.1M | 15% | 100% |
+| Text Decoder | 4 layers, 256 dim | 2.2M | 30% | 100% |
+| Embeddings | Vocab ~3000, tied | 1.6M | 23% | 100% |
+| **Total** | | **~7.2M** | 100% | ~5M |
+
+*Note: Actual parameter count is well below the 100M budget, leaving room for model scaling if accuracy improvements are needed.*
 
 ---
 
 ## Data Pipeline
 
-### Pseudo Ground-Truth Generation
+### Dataset: MSP60k
 
-Manual annotation of person descriptions is expensive and does not scale. We leverage large vision-language models to generate training data automatically.
+We use the **MSP60k dataset**, a pre-captioned collection of cropped person images with structured natural language descriptions. This eliminates the need for manual annotation or API-based caption generation.
 
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart LR
-    subgraph Sources["Data Sources"]
-        COCO[(COCO Dataset)]
-        CUSTOM[(Custom Images)]
+    subgraph Source["MSP60k Dataset"]
+        RAW[(JSONL Files)]
+        IMGS[Person Crops]
     end
 
-    subgraph Extraction["Person Extraction"]
-        DET[Person Detection]
-        CROP[Crop Extraction]
-        FILTER1["Size Filter: min 50×100px"]
+    subgraph Processing["Data Processing"]
+        PARSE[Parse JSONL]
+        CLEAN[Clean Captions]
+        SPLIT[Train/Val Split]
     end
 
-    subgraph Generation["Caption Generation"]
-        API[Large VLM API]
-        PROMPT["Structured Prompt"]
-    end
-
-    subgraph QA["Quality Assurance"]
-        CONF["Confidence Filter ≥ 0.6"]
-        STRUCT["Structure Check"]
-        LEN["Length Filter 20-200"]
+    subgraph Vocabulary["Vocabulary Building"]
+        CORPUS[Extract Corpus]
+        FREQ["Frequency Filter (min=5)"]
+        VOCAB[Build Vocabulary]
     end
 
     subgraph Output["Training Data"]
-        TRAIN[(train.json)]
-        VAL[(val.json)]
+        TRAIN[(train.jsonl - 27K)]
+        VAL[(val.jsonl - 3K)]
+        VOCABF[(vocabulary.json - 3.2K tokens)]
     end
 
-    COCO & CUSTOM --> DET --> CROP --> FILTER1
-    FILTER1 --> API
-    PROMPT -.-> API
-    API --> CONF --> STRUCT --> LEN
-    LEN --> TRAIN & VAL
+    RAW --> PARSE --> CLEAN --> SPLIT
+    CLEAN --> CORPUS --> FREQ --> VOCAB
+    SPLIT --> TRAIN & VAL
+    VOCAB --> VOCABF
 ```
 
-### Caption Generation Prompt
+### Dataset Statistics
 
-The prompt is carefully designed to enforce structured output:
+| Metric | Value |
+|--------|-------|
+| **Training samples** | 27,000 |
+| **Validation samples** | 3,000 |
+| **Total images** | 30,000 |
+| **Vocabulary size** | 3,179 tokens |
+| **Avg caption length** | ~30-50 tokens |
+| **Format** | JSONL (image path + caption) |
 
-```
-Analyze this cropped image of a person and provide a SHORT, STRUCTURED description.
+### Data Format
 
-RULES:
-1. Output ONLY a single line description
-2. Use this exact format: "[gender] wearing [upper clothing] and [lower clothing], 
-   [holding/carrying object], [action/posture]"
-3. Include colors when clearly visible
-4. If gender is clearly visible, start with "male" or "female" instead of "person"
-5. If ANY attribute is unclear, use "unknown"
-6. Do NOT make assumptions - only describe what you can clearly see
-
-VOCABULARY (use only these terms):
-- Upper: shirt, t-shirt, jacket, coat, sweater, hoodie, blouse, top, vest
-- Lower: pants, jeans, shorts, skirt, trousers, dress, sweatpants
-- Colors: black, white, red, blue, green, yellow, gray, brown, dark, light
-- Objects: phone, bag, backpack, bottle, umbrella, briefcase, laptop, nothing
-- Actions: standing, walking, running, sitting, waiting, talking
+Each JSONL entry contains:
+```json
+{
+  "image": "path/to/person_crop.jpg",
+  "answer": "male wearing dark blue jacket and gray pants, carrying laptop bag, walking"
+}
 ```
 
-### Quality Filtering Pipeline
+### Vocabulary Construction
 
-```mermaid
-%%{init: {'theme': 'dark'}}%%
-flowchart LR
-    RAW["Raw Captions (N samples)"] --> C1{"Confidence ≥ 0.6?"}
-    C1 -->|Yes| C2{"Contains 'wearing'?"}
-    C1 -->|No| REJ1["REJECTED"]
-    C2 -->|Yes| C3{"Length 20-200?"}
-    C2 -->|No| REJ2["REJECTED"]
-    C3 -->|Yes| C4{"Valid prefix?"}
-    C3 -->|No| REJ3["REJECTED"]
-    C4 -->|Yes| PASS["PASSED (~0.75N samples)"]
-    C4 -->|No| REJ4["REJECTED"]
+The vocabulary is built directly from the training corpus using frequency-based filtering:
+
+```python
+# Build vocabulary from corpus
+vocabulary = PersonVocabulary.from_corpus(
+    captions=training_captions,
+    min_freq=5,           # Minimum word frequency
+    max_vocab_size=5000   # Upper bound
+)
+# Result: 3,179 tokens including special tokens (<pad>, <bos>, <eos>, <unk>)
 ```
 
-Typical yield: 70-80% of raw captions pass all filters.
+This data-driven approach ensures the vocabulary covers all common terms in the dataset while filtering out rare noise.
 
 ---
 
@@ -334,8 +326,8 @@ Unlike general-purpose LLMs, our decoder is optimized for short, structured outp
 | **Hidden Dim** | 256 | Balances capacity with parameter budget |
 | **Attention Heads** | 8 | Fine-grained attention patterns |
 | **FFN Multiplier** | 4x | Standard transformer ratio |
-| **Vocabulary** | ~1000 tokens | Controlled vocabulary prevents hallucination |
-| **Max Length** | 64 tokens | Person descriptions rarely exceed 40 tokens |
+| **Vocabulary** | ~3000 tokens | Corpus-derived vocabulary ensures coverage |
+| **Max Length** | 128 tokens | Accommodates detailed descriptions |
 | **Embedding Tying** | Yes | Reduces parameters by 50% for embeddings |
 
 ### Controlled Vocabulary Taxonomy
@@ -516,14 +508,14 @@ sequenceDiagram
 |-----------|----------|-----------|
 | **Accuracy vs. Size** | Smaller model | Deployment constraints outweigh marginal accuracy gains |
 | **Vocabulary vs. Flexibility** | Controlled vocabulary | Consistency and parseability over open-ended generation |
-| **Training Data vs. Cost** | Pseudo-labels | Scalability over annotation quality |
+| **Training Data vs. Cost** | Pre-captioned/pseudo-labels | Scalability over manual annotation |
 | **Generalization vs. Specialization** | Task-specific model | Optimized for person description, not general VQA |
 
 ### Known Limitations
 
 | Limitation | Impact | Mitigation |
 |------------|--------|------------|
-| **Pseudo-label noise** | ~5-10% training samples may have errors | Confidence filtering, consistency checks |
+| **Caption noise** | Some training samples may have annotation errors | Data quality checks, robust training |
 | **Vocabulary constraints** | Cannot describe novel/rare items | Fallback to "unknown" or "unusual" |
 | **Occlusion handling** | Partial persons may yield incomplete descriptions | Include "partially visible" in vocabulary |
 | **Low-resolution inputs** | Degraded accuracy below 64×128 crops | Minimum resolution requirement in deployment |
@@ -627,42 +619,53 @@ pip install -r requirements.txt
 
 ### Environment Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (optional, for custom paths):
 
 ```bash
-# API Keys (for caption generation)
-GOOGLE_API_KEY=your-gemini-api-key
-OPENAI_API_KEY=your-openai-api-key  # Optional
-
-# Paths
-DATA_DIR=./data
+# Paths (defaults shown)
+DATA_DIR=./PERSON_DATA
 OUTPUT_DIR=./output
+CHECKPOINT_DIR=./checkpoints
 ```
+
+*Note: API keys are not required when using pre-captioned datasets like MSP60k.*
 
 ### Quick Start
 
 ```bash
-# 1. Verify installation
+# 1. Verify installation and run demo
 python demo.py
 
-# 2. Generate captions (if needed)
-python scripts/generate_data.py \
-    --image_dir ./person_images \
-    --output ./data/captions.json \
-    --provider gemini \
-    --max_images 1000
+# 2. Prepare data (split JSONL if needed)
+python -c "
+from data.dataset import split_jsonl
+split_jsonl('PERSON_DATA/MSP60k_train_v2.jsonl', 'PERSON_DATA/caption_with_attribute_labels/', train_ratio=0.9)
+"
 
-# 3. Train model
+# 3. Build vocabulary from corpus
+python -c "
+from data.vocabulary import PersonVocabulary
+from data.dataset import PersonBlobDataset
+ds = PersonBlobDataset('PERSON_DATA/caption_with_attribute_labels/train.jsonl', 'PERSON_DATA/images')
+vocab = PersonVocabulary.from_corpus([c for _, c in ds.samples], min_freq=5)
+vocab.save('data/vocabulary.json')
+print(f'Vocabulary size: {len(vocab)}')
+"
+
+# 4. Train model
 python scripts/train.py \
-    --train_file data/train.json \
-    --val_file data/val.json \
+    --train_file PERSON_DATA/caption_with_attribute_labels/train.jsonl \
+    --val_file PERSON_DATA/caption_with_attribute_labels/val.jsonl \
+    --image_dir PERSON_DATA/images \
+    --vocab_file data/vocabulary.json \
     --epochs 20 \
     --batch_size 32 \
     --output_dir ./checkpoints
 
-# 4. Run inference
+# 5. Run inference
 python scripts/predict.py \
     --checkpoint checkpoints/best_model.pt \
+    --vocab_file data/vocabulary.json \
     --image test_person.jpg
 ```
 
@@ -695,9 +698,11 @@ print(f"Confidence: {result['confidence']:.2f}")
 
 | Configuration | Parameters | Checkpoint | GPU Memory | Use Case |
 |---------------|------------|------------|------------|----------|
-| Ultra-Light | 15M | 60 MB | 1.2 GB | Edge/mobile devices |
-| **Balanced** | **30M** | **120 MB** | **2.1 GB** | **Production (recommended)** |
-| Quality | 50M | 200 MB | 3.5 GB | Accuracy-critical applications |
+| **Current** | **7.2M** | **~30 MB** | **<1 GB** | **Default (well under budget)** |
+| Scaled (4x decoder) | ~20M | ~80 MB | ~1.5 GB | Higher accuracy |
+| Scaled (larger encoder) | ~50M | ~200 MB | ~2.5 GB | Maximum accuracy |
+
+*Note: Current implementation uses ~7% of the 100M parameter budget, providing significant headroom for scaling if needed.*
 
 ### Inference Performance
 
@@ -720,7 +725,7 @@ xychart-beta
 
 ### Accuracy Metrics
 
-On held-out validation set (pseudo-labeled):
+On held-out validation set (MSP60k):
 
 | Metric | Balanced Config |
 |--------|-----------------|
@@ -742,9 +747,9 @@ person_vlm/
 │   └── config.yaml              # Training configuration
 ├── data/
 │   ├── __init__.py
-│   ├── dataset.py               # PyTorch dataset classes
-│   ├── generate_captions.py     # Pseudo-label generation
-│   └── vocabulary.py            # Controlled vocabulary
+│   ├── dataset.py               # PyTorch dataset classes (JSONL support)
+│   ├── vocabulary.py            # Corpus-based vocabulary builder
+│   └── vocabulary.json          # Built vocabulary (3.2K tokens)
 ├── models/
 │   ├── __init__.py
 │   ├── person_vlm.py            # Main VLM architecture
@@ -759,16 +764,27 @@ person_vlm/
 │   ├── __init__.py
 │   └── predict.py               # Inference interface
 ├── scripts/
-│   ├── generate_data.py         # Data generation CLI
 │   ├── train.py                 # Training CLI
-│   ├── predict.py               # Inference CLI
-│   └── extract_coco_persons.py  # COCO person extraction
+│   └── predict.py               # Inference CLI
 ├── demo.py                      # Full pipeline demonstration
 ├── config.py                    # Environment configuration
 ├── requirements.txt             # Python dependencies
-├── .env.example                 # Environment template
 ├── .gitignore
 └── README.md
+```
+
+### Data Directory Structure (External)
+
+```
+PERSON_DATA/
+├── images/                      # Person crop images
+│   ├── image_001.jpg
+│   ├── image_002.jpg
+│   └── ...
+├── caption_with_attribute_labels/
+│   ├── train.jsonl              # Training split (27K samples)
+│   └── val.jsonl                # Validation split (3K samples)
+└── MSP60k_train_v2.jsonl        # Original dataset file
 ```
 
 ---
