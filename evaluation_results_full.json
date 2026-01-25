@@ -1,0 +1,15 @@
+{
+  "method": "corpus-level (proper evaluation)",
+  "num_samples": 500,
+  "bleu1": 0.5465636569167569,
+  "bleu2": 0.3988675065516116,
+  "bleu3": 0.30830914949131155,
+  "bleu4": 0.24187228522598833,
+  "rouge_l": 0.42977651552487073,
+  "cider": 0.7516424094120332,
+  "color_accuracy": 0.645312666453606,
+  "clothing_accuracy": 0.6783687943262412,
+  "action_accuracy": 0.6693181818181818,
+  "gender_accuracy": 0.5606508875739645,
+  "overall_attribute_accuracy": 0.6384126325429984
+}

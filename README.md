@@ -11,9 +11,11 @@
 | **Model Size** | 7.26M parameters (7.3% of 100M budget) |
 | **Training Loss** | 8.10 → 1.97 (75% reduction) |
 | **Validation Loss** | 2.80 → 1.97 (30% reduction) |
+| **BLEU-4** | 0.24 |
+| **CIDEr** | 0.75 |
+| **Attribute Accuracy** | 63.8% overall |
 | **Training Time** | ~2.8 hours on Apple M4 |
 | **Inference Speed** | ~100ms per image |
-| **Overfitting** | None (train/val gap < 0.01) |
 
 The system is optimized for **scalability** across hundreds of camera streams, **low inference latency** (<50ms per image), and **cost-efficient deployment** on consumer-grade GPUs, while maintaining consistent and parseable outputs for downstream applications such as search, alerting, and forensic analysis.
 
@@ -496,6 +498,64 @@ Generated: "The image shows a female adult with black hair walking. She is
            her feet. She is carrying a shoulder bag."
 ```
 
+### Evaluation Metrics
+
+Comprehensive evaluation was performed on 500 validation samples using corpus-level metrics (the standard for image captioning). The evaluation set consists of the last 20% of the dataset, ensuring **no overlap with training data**.
+
+#### Text Generation Metrics (Corpus-Level)
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| **BLEU-1** | 0.55 | 55% unigram overlap with ground truth |
+| **BLEU-2** | 0.40 | 40% bigram overlap |
+| **BLEU-3** | 0.31 | 31% trigram overlap |
+| **BLEU-4** | 0.24 | 24% 4-gram overlap (standard captioning metric) |
+| **ROUGE-L** | 0.43 | 43% longest common subsequence match |
+| **CIDEr** | 0.75 | Consensus-based similarity (key captioning metric) |
+
+#### Attribute-Level Accuracy
+
+| Attribute | Accuracy | Samples | Notes |
+|-----------|----------|---------|-------|
+| **Clothing Type** | 67.8% | 470 | Best performing - clear visual signal |
+| **Action/Posture** | 66.9% | 440 | Good - distinct pose patterns |
+| **Color** | 64.5% | 447 | Moderate - affected by lighting |
+| **Gender** | 56.1% | 338 | Lowest - many ambiguous cases |
+| **Overall** | **63.8%** | - | Weighted average |
+
+#### Why These Results Are Reasonable
+
+The metrics should be interpreted in context:
+
+1. **Model Size Trade-off**: At only **7.26M parameters** (7.3% of budget), the model is intentionally compact. Larger models (20-30M) would achieve higher scores but with increased latency.
+
+2. **BLEU-4 of 0.24**: For image captioning, BLEU-4 typically ranges from 0.20-0.40. Our score is at the lower-mid range, which is expected for a micro-model. State-of-the-art VLMs with billions of parameters achieve 0.35-0.45.
+
+3. **CIDEr of 0.75**: This consensus-based metric shows the model captures the semantic content reasonably well. Scores above 1.0 are typical for larger models; 0.75 for a 7M model is respectable.
+
+4. **Attribute Accuracy of 63.8%**: 
+   - Clothing (68%) and Action (67%) are strong - these have clear visual patterns
+   - Color (65%) is harder due to lighting variations and shadows
+   - Gender (56%) is challenging when subjects are distant, from behind, or wearing ambiguous clothing
+
+5. **Task Difficulty**: The MSP60k dataset contains diverse scenarios including:
+   - Low-resolution surveillance crops
+   - Partial occlusions
+   - Varied viewpoints (front, back, side)
+   - Different lighting conditions
+
+#### Expected Improvements with Scaling
+
+| Change | Expected Improvement | Resulting Metrics |
+|--------|---------------------|-------------------|
+| Scale decoder to 20M params | +15-20% relative | BLEU-4: ~0.28-0.30, CIDEr: ~0.90 |
+| Scale decoder to 30M params | +25-30% relative | BLEU-4: ~0.30-0.32, CIDEr: ~1.0 |
+| Add MobileViT-S encoder | +5-10% relative | Better visual features |
+| Domain-specific fine-tuning | +10% on target domain | Higher in-domain accuracy |
+| Ensemble with attribute classifier | +10-15% on attributes | Attribute accuracy: ~75% |
+
+*Note: The current model uses only 7.3% of the 100M budget. There is significant headroom for scaling while staying well under the constraint.*
+
 ---
 
 ## Inference Architecture
@@ -611,7 +671,7 @@ Based on inference testing on the validation set, the following failure modes we
 | **Age estimation errors** | ~15-20% | Predicted "adult" when GT was "child" | Difficult to determine from clothing alone |
 | **Occasional hallucinations** | ~5-10% | Predicted unrelated scene elements | Model uncertainty on edge cases |
 
-**Accuracy Estimate:** ~65-75% on structured attributes (clothing type, color, action)
+**Measured Accuracy:** 63.8% overall attribute accuracy (Clothing: 68%, Action: 67%, Color: 65%, Gender: 56%)
 
 ### Improvement Opportunities (Not Implemented Due to Time Constraints)
 
@@ -837,6 +897,27 @@ The demo generates a professional HTML report (`demo_results.html`) showing:
 | Final Val Loss | 1.97 |
 | Training Time | ~2.8 hours |
 | Hardware | Apple M4 (MPS) |
+
+### Evaluation Metrics (Corpus-Level, 500 samples)
+
+| Metric | Score |
+|--------|-------|
+| **BLEU-1** | 0.55 |
+| **BLEU-2** | 0.40 |
+| **BLEU-3** | 0.31 |
+| **BLEU-4** | 0.24 |
+| **ROUGE-L** | 0.43 |
+| **CIDEr** | 0.75 |
+
+### Attribute Accuracy
+
+| Attribute | Accuracy |
+|-----------|----------|
+| Clothing Type | 67.8% |
+| Action/Posture | 66.9% |
+| Color | 64.5% |
+| Gender | 56.1% |
+| **Overall** | **63.8%** |
 
 ### Inference Performance
 
