@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PersonVLM | Vision-Language Model Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        dark: {
+                            950: '#030712',
+                            900: '#0a0f1a',
+                            800: '#111827',
+                            700: '#1f2937',
+                            600: '#374151',
+                        },
+                        accent: {
+                            blue: '#3b82f6',
+                            purple: '#8b5cf6',
+                            cyan: '#06b6d4',
+                            emerald: '#10b981',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #030712;
+            color: #e5e7eb;
+            overflow-x: hidden;
+        }
+
+        /* Animated Neural Network Background */
+        .neural-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .neural-bg canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Gradient Orbs */
+        .gradient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            top: -200px;
+            right: -200px;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(135deg, #06b6d4, #3b82f6);
+            bottom: -150px;
+            left: -150px;
+            animation-delay: -10s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -5s;
+            opacity: 0.15;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(20px, 30px) scale(1.02); }
+        }
+
+        /* Glass Card Effect */
+        .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 0 40px rgba(139, 92, 246, 0.1);
+        }
+
+        /* Animated Border Gradient */
+        .gradient-border {
+            position: relative;
+            background: linear-gradient(#0a0f1a, #0a0f1a) padding-box,
+                        linear-gradient(135deg, #3b82f6, #8b5cf6, #06b6d4) border-box;
+            border: 2px solid transparent;
+        }
+
+        /* Typing Animation */
+        .typing-effect {
+            overflow: hidden;
+            white-space: nowrap;
+            animation: typing 2s steps(40) forwards;
+        }
+
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+
+        /* Flow Animation */
+        .flow-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: flowDash 3s ease-in-out infinite;
+        }
+
+        @keyframes flowDash {
+            0% { stroke-dashoffset: 1000; }
+            50% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -1000; }
+        }
+
+        /* Pulse Animation */
+        .pulse-glow {
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.5); }
+        }
+
+        /* Scroll Reveal */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Stats Counter */
+        .stat-number {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Image Hover Effect */
+        .image-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .image-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .image-card:hover .image-overlay {
+            opacity: 1;
+        }
+
+        .image-overlay {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0f1a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 4px;
+        }
+
+        /* Navigation */
+        .nav-link {
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        /* Badge Animation */
+        .badge-pulse {
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Architecture Flow */
+        .arch-node {
+            transition: all 0.3s ease;
+        }
+
+        .arch-node:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Sample Card */
+        .sample-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sample-card:hover {
+            transform: scale(1.02);
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        /* Text Gradient */
+        .text-gradient {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Loading Shimmer */
+        .shimmer {
+            background: linear-gradient(90deg, 
+                rgba(255,255,255,0) 0%, 
+                rgba(255,255,255,0.05) 50%, 
+                rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Connection Lines */
+        .connection-line {
+            stroke: url(#gradient-line);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 8 4;
+            animation: dashMove 1s linear infinite;
+        }
+
+        @keyframes dashMove {
+            to { stroke-dashoffset: -12; }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Animated Background -->
+    <div class="neural-bg">
+        <canvas id="neuralCanvas"></canvas>
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-bold">Person<span class="text-gradient">VLM</span></span>
+                </div>
+                <div class="hidden md:flex items-center gap-8">
+                    <a href="#overview" class="nav-link text-gray-400 hover:text-white transition-colors">Overview</a>
+                    <a href="#architecture" class="nav-link text-gray-400 hover:text-white transition-colors">Architecture</a>
+                    <a href="#results" class="nav-link text-gray-400 hover:text-white transition-colors">Results</a>
+                    <a href="#metrics" class="nav-link text-gray-400 hover:text-white transition-colors">Metrics</a>
+                </div>
+                <a href="https://github.com/rishi02102017/Metafusion-Task" target="_blank" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    <span class="text-sm font-medium">GitHub</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="overview" class="relative min-h-screen flex items-center justify-center pt-20">
+        <div class="max-w-7xl mx-auto px-6 py-20">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 mb-6 badge-pulse">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-sm font-medium text-gray-300">Lightweight Vision-Language Model</span>
+                </div>
+                <h1 class="text-5xl md:text-7xl font-bold mb-6">
+                    <span class="text-white">Transform</span>
+                    <span class="text-gradient"> Images</span>
+                    <br>
+                    <span class="text-white">Into</span>
+                    <span class="text-gradient"> Understanding</span>
+                </h1>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto mb-10">
+                    A 7.26M parameter Vision-Language Model that generates structured, accurate descriptions 
+                    of people from images. Built for real-time surveillance and monitoring applications.
+                </p>
+                <div class="flex flex-wrap items-center justify-center gap-4">
+                    <a href="#results" class="px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold transition-all transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/25">
+                        View Results
+                    </a>
+                    <a href="#architecture" class="px-8 py-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white font-semibold transition-all">
+                        Explore Architecture
+                    </a>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 reveal" style="transition-delay: 0.2s;">
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <div class="text-4xl font-bold stat-number mb-2" data-target="7.26">0</div>
+                    <div class="text-sm text-gray-400 uppercase tracking-wider">Million Params</div>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <div class="text-4xl font-bold stat-number mb-2" data-target="100">0</div>
+                    <div class="text-sm text-gray-400 uppercase tracking-wider">ms Inference</div>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <div class="text-4xl font-bold stat-number mb-2" data-target="30000">0</div>
+                    <div class="text-sm text-gray-400 uppercase tracking-wider">Training Samples</div>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <div class="text-4xl font-bold stat-number mb-2" data-target="75">0</div>
+                    <div class="text-sm text-gray-400 uppercase tracking-wider">% Loss Reduction</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scroll Indicator -->
+        <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce">
+            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+        </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="relative py-20">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16 reveal">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                    <span class="text-white">Model</span>
+                    <span class="text-gradient"> Architecture</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    A carefully designed pipeline that bridges visual perception with language understanding
+                </p>
+            </div>
+
+            <!-- Architecture Visualization -->
+            <div class="reveal" style="transition-delay: 0.2s;">
+                <div class="glass-card rounded-3xl p-8 md:p-12">
+                    <div class="flex flex-col lg:flex-row items-center justify-between gap-8">
+                        <!-- Input -->
+                        <div class="arch-node glass-card rounded-2xl p-6 text-center w-full lg:w-48 gradient-border">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-white mb-1">Input Image</h3>
+                            <p class="text-sm text-gray-400">224 x 224 RGB</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="hidden lg:block">
+                            <svg width="60" height="40" viewBox="0 0 60 40">
+                                <defs>
+                                    <linearGradient id="gradient-line" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" style="stop-color:#06b6d4"/>
+                                        <stop offset="100%" style="stop-color:#3b82f6"/>
+                                    </linearGradient>
+                                </defs>
+                                <path class="connection-line" d="M0,20 L50,20"/>
+                                <polygon fill="#3b82f6" points="50,15 60,20 50,25"/>
+                            </svg>
+                        </div>
+
+                        <!-- Vision Encoder -->
+                        <div class="arch-node glass-card rounded-2xl p-6 text-center w-full lg:w-56 gradient-border">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-white mb-1">Vision Encoder</h3>
+                            <p class="text-sm text-gray-400">MobileViT-XS</p>
+                            <p class="text-xs text-blue-400 mt-2">2.03M params (80% frozen)</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="hidden lg:block">
+                            <svg width="60" height="40" viewBox="0 0 60 40">
+                                <path class="connection-line" d="M0,20 L50,20"/>
+                                <polygon fill="#8b5cf6" points="50,15 60,20 50,25"/>
+                            </svg>
+                        </div>
+
+                        <!-- Projection -->
+                        <div class="arch-node glass-card rounded-2xl p-6 text-center w-full lg:w-56 gradient-border">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-white mb-1">Projection Layer</h3>
+                            <p class="text-sm text-gray-400">MLP + Q-Former</p>
+                            <p class="text-xs text-purple-400 mt-2">1.18M params</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="hidden lg:block">
+                            <svg width="60" height="40" viewBox="0 0 60 40">
+                                <path class="connection-line" d="M0,20 L50,20"/>
+                                <polygon fill="#ec4899" points="50,15 60,20 50,25"/>
+                            </svg>
+                        </div>
+
+                        <!-- Text Decoder -->
+                        <div class="arch-node glass-card rounded-2xl p-6 text-center w-full lg:w-56 gradient-border">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-pink-500/20 to-orange-500/20 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-white mb-1">Text Decoder</h3>
+                            <p class="text-sm text-gray-400">4-Layer Transformer</p>
+                            <p class="text-xs text-pink-400 mt-2">4.04M params</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="hidden lg:block">
+                            <svg width="60" height="40" viewBox="0 0 60 40">
+                                <path class="connection-line" d="M0,20 L50,20"/>
+                                <polygon fill="#10b981" points="50,15 60,20 50,25"/>
+                            </svg>
+                        </div>
+
+                        <!-- Output -->
+                        <div class="arch-node glass-card rounded-2xl p-6 text-center w-full lg:w-48 gradient-border">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-white mb-1">Description</h3>
+                            <p class="text-sm text-gray-400">Structured Text</p>
+                        </div>
+                    </div>
+
+                    <!-- Architecture Details -->
+                    <div class="grid md:grid-cols-3 gap-6 mt-12 pt-8 border-t border-white/10">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gradient mb-1">3,179</div>
+                            <div class="text-sm text-gray-400">Vocabulary Tokens</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gradient mb-1">256</div>
+                            <div class="text-sm text-gray-400">Hidden Dimension</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gradient mb-1">8</div>
+                            <div class="text-sm text-gray-400">Visual Query Tokens</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results" class="relative py-20">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16 reveal">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                    <span class="text-white">Inference</span>
+                    <span class="text-gradient"> Results</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Real examples from the validation set showing model-generated descriptions
+                </p>
+            </div>
+
+            <!-- Results Grid -->
+            <div class="grid md:grid-cols-2 gap-8" id="results-grid">
+                <!-- Results will be populated by JavaScript -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Metrics Section -->
+    <section id="metrics" class="relative py-16">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-10 reveal">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                    <span class="text-white">Training</span>
+                    <span class="text-gradient"> Metrics</span>
+                </h2>
+                <p class="text-lg text-gray-400 max-w-2xl mx-auto">
+                    20 epochs of training with consistent improvement and no overfitting
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6 reveal" style="transition-delay: 0.2s;">
+                <!-- Loss Chart -->
+                <div class="glass-card rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Loss Progression
+                    </h3>
+                    <div class="h-48">
+                        <canvas id="lossChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Training Details -->
+                <div class="glass-card rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Training Configuration
+                    </h3>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Epochs</span>
+                            <span class="font-mono text-white">20</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Batch Size</span>
+                            <span class="font-mono text-white">32</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Learning Rate</span>
+                            <span class="font-mono text-white">1e-4</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Optimizer</span>
+                            <span class="font-mono text-white">AdamW</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Scheduler</span>
+                            <span class="font-mono text-white">Cosine</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-white/10">
+                            <span class="text-gray-400">Weight Decay</span>
+                            <span class="font-mono text-white">0.01</span>
+                        </div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-400">Initial Loss</span>
+                            <span class="font-mono text-red-400">8.10</span>
+                        </div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-400">Final Loss</span>
+                            <span class="font-mono text-emerald-400">1.97</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Insights - Inline -->
+            <div class="mt-6 grid md:grid-cols-3 gap-4 reveal" style="transition-delay: 0.3s;">
+                <div class="glass-card rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-white text-sm">No Overfitting</h4>
+                        <p class="text-xs text-gray-400">Train/Val gap under 0.01</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-white text-sm">75% Loss Reduction</h4>
+                        <p class="text-xs text-gray-400">Smooth convergence</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-white text-sm">2.8 Hours</h4>
+                        <p class="text-xs text-gray-400">On Apple M4</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Output Capabilities Section -->
+    <section class="relative py-16">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16 reveal">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                    <span class="text-white">What It</span>
+                    <span class="text-gradient"> Detects</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    The model generates structured descriptions covering key attributes
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 reveal" style="transition-delay: 0.2s;">
+                <div class="glass-card rounded-2xl p-6 text-center hover:scale-105 transition-transform">
+                    <div class="text-4xl mb-4">👔</div>
+                    <h4 class="font-semibold text-white mb-2">Clothing</h4>
+                    <p class="text-sm text-gray-400">Upper/lower garments, colors, styles, patterns</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center hover:scale-105 transition-transform">
+                    <div class="text-4xl mb-4">🎒</div>
+                    <h4 class="font-semibold text-white mb-2">Objects</h4>
+                    <p class="text-sm text-gray-400">Bags, phones, umbrellas, and items in hand</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center hover:scale-105 transition-transform">
+                    <div class="text-4xl mb-4">🚶</div>
+                    <h4 class="font-semibold text-white mb-2">Actions</h4>
+                    <p class="text-sm text-gray-400">Walking, standing, sitting, and postures</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center hover:scale-105 transition-transform">
+                    <div class="text-4xl mb-4">👤</div>
+                    <h4 class="font-semibold text-white mb-2">Attributes</h4>
+                    <p class="text-sm text-gray-400">Gender, age group, build, hair style</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="relative py-12 border-t border-white/10">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-bold">Person<span class="text-gradient">VLM</span></span>
+                </div>
+                <div class="text-sm text-gray-500">
+                    Built with PyTorch | 7.26M Parameters | Under 100M Budget
+                </div>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-500">January 2026</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        // Sample Results Data
+        const sampleResults = [
+            {
+                image: "part1__073_00209_011.jpg",
+                generated: "The image shows a side view of an adult male standing. He is wearing a black hat, a black long-sleeved jacket, dark trousers, and a bright lime green safety vest. The vest has reflective stripes.",
+                groundTruth: "The image shows a side view of a person walking. The individual is wearing a bright lime green safety vest over a dark-colored long-sleeved jacket and dark trousers."
+            },
+            {
+                image: "part15_00153_008.jpg",
+                generated: "The image shows a male adult with black hair wearing a red jacket over a long-sleeved shirt and black trousers. He is also wearing casual shoes. The person appears to be walking.",
+                groundTruth: "The image shows a male adult with black hair wearing glasses and a red jacket over a long-sleeved shirt. He is also wearing gray trousers and casual shoes."
+            },
+            {
+                image: "part4_11_00637_014.jpg",
+                generated: "The image shows a close-up, front view of a young Asian boy. He appears to be a child, with short, black hair. He's wearing a bright blue, short-sleeved collared shirt.",
+                groundTruth: "The image shows a close-up side profile of a young Asian boy with black hair. He appears to be a child of elementary or middle school age. He's wearing a blue shirt."
+            },
+            {
+                image: "part17_20231213071734_04640_006.jpg",
+                generated: "The image shows a female adult with black hair walking. She is wearing a short-sleeved top and trousers, and she has sandals on her feet. She is carrying a shoulder bag.",
+                groundTruth: "The image shows a low-resolution photograph of a young adult woman walking. She has long black hair and is wearing a maroon short-sleeved t-shirt with an orange and yellow graphic design."
+            },
+            {
+                image: "part17_20231212171304_01565_010.jpg",
+                generated: "The image shows the back of a person walking away from the camera. The person appears to be a male adult with black hair, wearing a light blue short-sleeved shirt and light beige shorts.",
+                groundTruth: "The image shows the back of a young boy walking away from the camera. He has black hair and is wearing a light teal short-sleeved t-shirt with some illegible light text."
+            },
+            {
+                image: "part16_20231217222055_04662_010.jpg",
+                generated: "The image shows a blurry, low-resolution picture of an adult male from the front. He is wearing a dark-colored, long-sleeved cotton-padded coat, light-colored trousers, and a hat.",
+                groundTruth: "The image shows a person standing from behind. The individual appears to be wearing a long-sleeved, cotton-padded coat and trousers. They have on casual shoes and are wearing a hat."
+            }
+        ];
+
+        // Neural Network Background Animation
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        class Node {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 2 + 1;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+            }
+            
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.5)';
+                ctx.fill();
+            }
+        }
+
+        const nodes = Array.from({ length: 80 }, () => new Node());
+        const connectionDistance = 150;
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw connections
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const dx = nodes[i].x - nodes[j].x;
+                    const dy = nodes[i].y - nodes[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < connectionDistance) {
+                        const opacity = (1 - distance / connectionDistance) * 0.2;
+                        ctx.beginPath();
+                        ctx.moveTo(nodes[i].x, nodes[i].y);
+                        ctx.lineTo(nodes[j].x, nodes[j].y);
+                        ctx.strokeStyle = `rgba(139, 92, 246, ${opacity})`;
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            // Update and draw nodes
+            nodes.forEach(node => {
+                node.update();
+                node.draw();
+            });
+            
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Scroll Reveal Animation
+        function reveal() {
+            const reveals = document.querySelectorAll('.reveal');
+            reveals.forEach(element => {
+                const windowHeight = window.innerHeight;
+                const elementTop = element.getBoundingClientRect().top;
+                const revealPoint = 150;
+                
+                if (elementTop < windowHeight - revealPoint) {
+                    element.classList.add('active');
+                }
+            });
+        }
+        window.addEventListener('scroll', reveal);
+        reveal();
+
+        // Counter Animation
+        function animateCounters() {
+            const counters = document.querySelectorAll('[data-target]');
+            counters.forEach(counter => {
+                const target = parseFloat(counter.getAttribute('data-target'));
+                const duration = 2000;
+                const startTime = performance.now();
+                
+                function updateCounter(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const easeProgress = 1 - Math.pow(1 - progress, 3);
+                    
+                    let current;
+                    if (target >= 1000) {
+                        current = Math.floor(easeProgress * target).toLocaleString();
+                    } else if (target < 10) {
+                        current = (easeProgress * target).toFixed(2);
+                    } else {
+                        current = Math.floor(easeProgress * target);
+                    }
+                    
+                    counter.textContent = current;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(updateCounter);
+                    }
+                }
+                
+                requestAnimationFrame(updateCounter);
+            });
+        }
+        
+        // Trigger counter animation when section is visible
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    animateCounters();
+                    observer.disconnect();
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        document.querySelectorAll('[data-target]').forEach(el => {
+            observer.observe(el.parentElement);
+        });
+
+        // Populate Results Grid
+        const resultsGrid = document.getElementById('results-grid');
+        sampleResults.forEach((result, index) => {
+            const card = document.createElement('div');
+            card.className = 'sample-card glass-card rounded-3xl overflow-hidden reveal';
+            card.style.transitionDelay = `${index * 0.1}s`;
+            
+            card.innerHTML = `
+                <div class="relative">
+                    <img src="PERSON_DATA/images/${result.image}" alt="Sample ${index + 1}" 
+                         class="w-full h-64 object-cover"
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22256%22><rect fill=%22%23111827%22 width=%22400%22 height=%22256%22/><text fill=%22%236b7280%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 font-family=%22Inter%22>Image: ${result.image}</text></svg>'">
+                    <div class="absolute top-4 left-4">
+                        <span class="px-3 py-1 rounded-full text-xs font-medium bg-black/50 backdrop-blur-sm text-white">
+                            Sample ${index + 1}
+                        </span>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span class="text-xs font-medium text-emerald-400 uppercase tracking-wider">Generated</span>
+                        </div>
+                        <p class="text-sm text-gray-300 leading-relaxed">${result.generated}</p>
+                    </div>
+                    <div class="pt-4 border-t border-white/10">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span class="text-xs font-medium text-blue-400 uppercase tracking-wider">Ground Truth</span>
+                        </div>
+                        <p class="text-sm text-gray-400 leading-relaxed">${result.groundTruth}</p>
+                    </div>
+                </div>
+            `;
+            
+            resultsGrid.appendChild(card);
+        });
+        
+        // Re-run reveal for dynamically added elements
+        setTimeout(reveal, 100);
+
+        // Loss Chart
+        const lossCtx = document.getElementById('lossChart').getContext('2d');
+        const epochs = Array.from({ length: 20 }, (_, i) => i + 1);
+        const trainLoss = [4.52, 3.21, 2.67, 2.38, 2.21, 2.12, 2.07, 2.04, 2.02, 2.00, 1.99, 1.98, 1.97, 1.97, 1.96, 1.96, 1.97, 1.96, 1.96, 1.96];
+        const valLoss = [2.80, 2.42, 2.21, 2.11, 2.05, 2.01, 1.99, 1.98, 1.97, 1.97, 1.97, 1.97, 1.97, 1.97, 1.98, 1.97, 1.97, 1.97, 1.97, 1.97];
+
+        new Chart(lossCtx, {
+            type: 'line',
+            data: {
+                labels: epochs,
+                datasets: [
+                    {
+                        label: 'Train',
+                        data: trainLoss,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4,
+                        borderWidth: 2,
+                    },
+                    {
+                        label: 'Val',
+                        data: valLoss,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4,
+                        borderWidth: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 1000 },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: '#9ca3af',
+                            font: { family: 'Inter', size: 11 },
+                            boxWidth: 12,
+                            padding: 10
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)', display: false },
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        title: { display: false }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        title: { display: false },
+                        min: 1.5,
+                        max: 5
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' }
+            }
+        });
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

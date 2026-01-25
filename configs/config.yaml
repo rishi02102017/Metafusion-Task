@@ -1,0 +1,150 @@
+# Person VLM Configuration
+# ========================
+# Lightweight Vision-Language Model for Person Description
+
+# Model Architecture
+model:
+  # Vision encoder (mostly frozen)
+  vision:
+    backbone: "mobilevit_xs"  # Options: mobilevit_xxs, mobilevit_xs, efficientnet_lite0, vit_tiny_patch16_224
+    pretrained: true
+    freeze_ratio: 0.9  # Freeze 90% of vision encoder
+  
+  # Projection layer
+  projection:
+    num_visual_tokens: 8  # Number of visual tokens for decoder
+    hidden_dim: 512
+  
+  # Text decoder
+  decoder:
+    size: "small"  # Options: tiny (~5M), small (~15M), medium (~25M)
+  
+  # Shared dimensions
+  hidden_dim: 256
+  
+  # Regularization
+  dropout: 0.1
+  label_smoothing: 0.1
+
+# Training Configuration
+training:
+  # Basic settings
+  epochs: 20
+  batch_size: 32
+  
+  # Optimizer
+  optimizer: "adamw"
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  
+  # Scheduler
+  scheduler: "cosine"
+  warmup_ratio: 0.1
+  
+  # Mixed precision
+  use_amp: true
+  
+  # Gradient clipping
+  gradient_clip: 1.0
+  
+  # Data loading
+  num_workers: 4
+  image_size: 224
+  max_seq_length: 256  # Accommodate detailed MSP60k captions (mean ~100 tokens)
+  
+  # Checkpointing
+  output_dir: "./checkpoints"
+  save_every: 1  # epochs
+  
+  # Early stopping
+  early_stopping: true
+  patience: 5
+  
+  # Logging
+  log_every: 50  # steps
+  eval_every: 500  # steps
+  
+  # Reproducibility
+  seed: 42
+
+# Data Configuration
+data:
+  # Dataset paths (MSP60k format)
+  train_file: "PERSON_DATA/caption_with_attribute_labels/train.jsonl"
+  val_file: "PERSON_DATA/caption_with_attribute_labels/val.jsonl"
+  
+  # Image directory (where person blob images are stored)
+  image_dir: "PERSON_DATA/images"
+  
+  # Original dataset file (before split)
+  full_dataset: "PERSON_DATA/caption_with_attribute_labels/MSP60k_train_v2.jsonl"
+  
+  # Augmentation
+  augment_train: true
+  
+  # Vocabulary
+  vocab_file: "data/vocabulary.json"  # Built from MSP60k corpus
+  max_vocab_size: 5000  # Upper bound for vocabulary building
+  
+  # Split ratios (if creating splits)
+  val_ratio: 0.1
+  test_ratio: 0.05
+
+# Inference Configuration
+inference:
+  # Generation parameters
+  temperature: 0.7
+  top_k: 50
+  top_p: 0.9
+  max_length: 64
+  
+  # Batch processing
+  batch_size: 16
+  
+  # Confidence estimation
+  num_samples: 5  # For confidence estimation
+
+# Deployment
+deployment:
+  # ONNX export
+  onnx:
+    enable: false
+    output_path: "model.onnx"
+    opset_version: 14
+  
+  # Quantization (optional)
+  quantization:
+    enable: false
+    type: "dynamic"  # Options: dynamic, static
+
+# Hardware Configuration
+hardware:
+  device: "auto"  # auto, cuda, mps, cpu
+  precision: "fp16"  # fp16, fp32, bf16
+
+# Recommended Configurations for Different Budgets
+# ================================================
+#
+# 1. ULTRA-LIGHT (~15M params, fastest)
+#    model:
+#      vision:
+#        backbone: "mobilevit_xxs"
+#        freeze_ratio: 0.95
+#      decoder:
+#        size: "tiny"
+#    training:
+#      batch_size: 64
+#
+# 2. BALANCED (~30M params, recommended)
+#    [Current default configuration]
+#
+# 3. QUALITY (~50M params, best accuracy)
+#    model:
+#      vision:
+#        backbone: "mobilevit_xs"
+#        freeze_ratio: 0.85
+#      decoder:
+#        size: "medium"
+#    training:
+#      batch_size: 24
+#      learning_rate: 5.0e-5
