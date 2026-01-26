@@ -4,9 +4,11 @@ PersonVLM Demo Script
 Demonstrates model inference on test images with comparison to ground truth.
 
 Usage:
-    python3 demo.py                    # Run demo on random test samples
-    python3 demo.py --num_samples 10   # Specify number of samples
-    python3 demo.py --save_html        # Save results as HTML report
+    python3 demo.py                              # Run with best pretrained model
+    python3 demo.py --model baseline             # Run with baseline model
+    python3 demo.py --model pretrained           # Run with pretrained model (default)
+    python3 demo.py --num_samples 10             # Specify number of samples
+    python3 demo.py --save_html                  # Save results as HTML report
 """
 
 import sys
@@ -23,25 +25,91 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
-from models import PersonVLM
-from data.vocabulary import PersonVocabulary
 
-
-def load_model_and_vocab():
+def load_model_and_vocab(model_type='pretrained'):
     """Load the trained model and vocabulary."""
-    print("Loading vocabulary...")
-    vocab = PersonVocabulary.load('data/vocabulary.json')
-    
-    print("Loading model...")
-    model = PersonVLM.from_pretrained('checkpoints/best_model.pt', tokenizer=vocab)
     
     device = torch.device('mps' if torch.backends.mps.is_available() 
                           else 'cuda' if torch.cuda.is_available() 
                           else 'cpu')
-    model = model.to(device)
-    model.eval()
     
-    return model, vocab, device
+    if model_type == 'baseline':
+        # Load baseline custom decoder model
+        from models import PersonVLM
+        from data.vocabulary import PersonVocabulary
+        
+        checkpoint_path = 'checkpoints/best_model.pt'
+        
+        # Check if checkpoint exists and is valid (not a stub file)
+        if not os.path.exists(checkpoint_path):
+            print("Baseline checkpoint not found. Falling back to pretrained model.")
+            return load_model_and_vocab('pretrained')
+        
+        # Check file size - baseline model should be ~30MB, stub files are ~1MB
+        file_size = os.path.getsize(checkpoint_path) / (1024 * 1024)  # MB
+        if file_size < 5:  # Stub files are ~1MB
+            print(f"Baseline checkpoint appears to be a stub file ({file_size:.1f}MB).")
+            print("Falling back to pretrained model.")
+            return load_model_and_vocab('pretrained')
+        
+        print("Loading baseline model (7.26M params)...")
+        vocab = PersonVocabulary.load('data/vocabulary.json')
+        model = PersonVLM.from_pretrained(checkpoint_path, tokenizer=vocab)
+        model = model.to(device)
+        model.eval()
+        
+        return model, vocab, device, 'baseline'
+    
+    else:
+        # Load pretrained GPT-2 decoder model
+        from models.person_vlm_pretrained import PersonVLMPretrained, PersonVLMPretrainedConfig
+        from transformers import GPT2Tokenizer
+        
+        print("Loading pretrained model (98.51M params)...")
+        
+        # Load tokenizer
+        tokenizer = GPT2Tokenizer.from_pretrained('distilgpt2')
+        tokenizer.pad_token = tokenizer.eos_token
+        
+        # Determine checkpoint path
+        if os.path.exists('checkpoints_pretrained_v2/best_model.pt'):
+            checkpoint_path = 'checkpoints_pretrained_v2/best_model.pt'
+            print(f"Using fine-tuned checkpoint: {checkpoint_path}")
+        elif os.path.exists('checkpoints_pretrained/best_model.pt'):
+            checkpoint_path = 'checkpoints_pretrained/best_model.pt'
+            print(f"Using pretrained checkpoint: {checkpoint_path}")
+        else:
+            raise FileNotFoundError("No pretrained checkpoint found. Please train the model first.")
+        
+        # Load checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        
+        # Get config from checkpoint
+        if 'config' in checkpoint:
+            saved_config = checkpoint['config']
+            if isinstance(saved_config, PersonVLMPretrainedConfig):
+                config = saved_config
+            elif isinstance(saved_config, dict):
+                config = PersonVLMPretrainedConfig(**saved_config)
+            else:
+                config = PersonVLMPretrainedConfig()
+        else:
+            config = PersonVLMPretrainedConfig()
+        
+        # Create and load model
+        model = PersonVLMPretrained(config=config, tokenizer=tokenizer)
+        
+        if 'state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['state_dict'])
+        elif 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+        
+        model = model.to(device)
+        model.eval()
+        
+        return model, tokenizer, device, 'pretrained'
 
 
 def load_test_data(test_file='PERSON_DATA/caption_with_attribute_labels/val.jsonl'):
@@ -52,7 +120,7 @@ def load_test_data(test_file='PERSON_DATA/caption_with_attribute_labels/val.json
             sample = json.loads(line)
             samples.append({
                 'image': sample.get('image', ''),
-                'ground_truth': sample.get('answer', ''),
+                'ground_truth': sample.get('answer', sample.get('caption', '')),
             })
     return samples
 
@@ -66,19 +134,34 @@ def get_image_transform():
     ])
 
 
-def run_inference(model, image_path, transform, device):
+def run_inference(model, image_path, transform, device, model_type='pretrained'):
     """Run inference on a single image."""
     image = Image.open(image_path).convert('RGB')
     image_tensor = transform(image).unsqueeze(0).to(device)
     
     with torch.no_grad():
-        description = model.generate(
-            image_tensor,
-            max_length=100,
-            temperature=0.7,
-            top_k=50,
-            top_p=0.9,
-        )[0]
+        if model_type == 'pretrained':
+            # Pretrained model returns list of strings
+            descriptions = model.generate(
+                image_tensor,
+                max_length=100,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.9,
+                do_sample=True,
+            )
+            description = descriptions[0] if descriptions else ""
+            # Clean up
+            description = description.lstrip('. ').strip()
+        else:
+            # Baseline model
+            description = model.generate(
+                image_tensor,
+                max_length=100,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.9,
+            )[0]
     
     return description
 
@@ -91,10 +174,10 @@ def truncate_text(text, max_words=50):
     return text
 
 
-def print_results(results):
+def print_results(results, model_type):
     """Print results to console in a nice format."""
     print("\n" + "=" * 80)
-    print("PERSONVLM INFERENCE RESULTS")
+    print(f"PERSONVLM INFERENCE RESULTS ({model_type.upper()} MODEL)")
     print("=" * 80)
     
     for i, r in enumerate(results, 1):
@@ -106,8 +189,16 @@ def print_results(results):
     print("\n" + "=" * 80)
 
 
-def generate_html_report(results, output_path='demo_results.html'):
+def generate_html_report(results, model_type, output_path='demo_results.html'):
     """Generate an HTML report with images and descriptions."""
+    
+    # Set stats based on model type
+    if model_type == 'pretrained':
+        params = "98.51M"
+        inference_time = "~25ms"
+    else:
+        params = "7.26M"
+        inference_time = "~15ms"
     
     html_content = """<!DOCTYPE html>
 <html lang="en">
@@ -134,6 +225,15 @@ def generate_html_report(results, output_path='demo_results.html'):
             text-align: center;
             color: #8b949e;
             margin-bottom: 30px;
+        }
+        .model-badge {
+            display: inline-block;
+            background: #238636;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-left: 10px;
         }
         .stats {
             display: flex;
@@ -219,12 +319,12 @@ def generate_html_report(results, output_path='demo_results.html'):
 </head>
 <body>
     <div class="container">
-        <h1>PersonVLM Demo Results</h1>
+        <h1>PersonVLM Demo Results <span class="model-badge">""" + model_type.upper() + """</span></h1>
         <p class="subtitle">Vision-Language Model for Person Description Generation</p>
         
         <div class="stats">
             <div class="stat-box">
-                <div class="stat-value">7.26M</div>
+                <div class="stat-value">""" + params + """</div>
                 <div class="stat-label">Parameters</div>
             </div>
             <div class="stat-box">
@@ -232,7 +332,7 @@ def generate_html_report(results, output_path='demo_results.html'):
                 <div class="stat-label">Test Samples</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value">~100ms</div>
+                <div class="stat-value">""" + inference_time + """</div>
                 <div class="stat-label">Inference Time</div>
             </div>
         </div>
@@ -265,7 +365,7 @@ def generate_html_report(results, output_path='demo_results.html'):
     
     html_content += f"""
         <div class="footer">
-            Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | PersonVLM Demo
+            Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | PersonVLM Demo ({model_type})
         </div>
     </div>
 </body>
@@ -281,6 +381,9 @@ def generate_html_report(results, output_path='demo_results.html'):
 
 def main():
     parser = argparse.ArgumentParser(description='PersonVLM Demo')
+    parser.add_argument('--model', type=str, default='pretrained', 
+                        choices=['baseline', 'pretrained'],
+                        help='Model to use: baseline (7.26M) or pretrained (98.51M)')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples to test')
     parser.add_argument('--save_html', action='store_true', help='Save results as HTML report')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
@@ -293,9 +396,9 @@ def main():
     print("=" * 60)
     
     # Load model
-    model, vocab, device = load_model_and_vocab()
+    model, tokenizer, device, model_type = load_model_and_vocab(args.model)
     print(f"Device: {device}")
-    print(f"Vocabulary size: {len(vocab)}")
+    print(f"Model type: {model_type}")
     
     # Load test data
     test_samples = load_test_data()
@@ -321,7 +424,7 @@ def main():
             print(f"  [{i}] Image not found: {image_name}")
             continue
         
-        generated = run_inference(model, image_path, transform, device)
+        generated = run_inference(model, image_path, transform, device, model_type)
         
         results.append({
             'image_name': image_name,
@@ -333,11 +436,11 @@ def main():
         print(f"  [{i}] Processed: {image_name}")
     
     # Print results
-    print_results(results)
+    print_results(results, model_type)
     
     # Save HTML if requested
     if args.save_html:
-        generate_html_report(results)
+        generate_html_report(results, model_type)
     
     print("\nDemo complete!")
     
