@@ -4,8 +4,13 @@ PERSON_DATA/images/
 # Model checkpoints (large files, use Git LFS or external storage)
 checkpoints/
 checkpoints_scaled/
+checkpoints_pretrained/
+checkpoints_pretrained_v2/
 *.pt
 *.pth
+
+# Report (kept local)
+Report.tex
 
 # Training artifacts
 TRAINING_BEST_PRACTICES.md

@@ -1,0 +1,19 @@
+{
+  "model": "checkpoints_pretrained/best_model.pt",
+  "samples_evaluated": 500,
+  "bleu_1": 53.58,
+  "bleu_2": 39.64,
+  "bleu_3": 30.98,
+  "bleu_4": 24.36,
+  "rouge_l": 41.68,
+  "cider": 0.79,
+  "avg_attribute_accuracy": 39.38,
+  "attribute_accuracy": {
+    "gender": 58.97,
+    "hair_color": 73.23,
+    "lower_color": 16.47,
+    "age": 26.92,
+    "bag": 33.33,
+    "upper_color": 27.34
+  }
+}
