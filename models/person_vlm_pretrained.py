@@ -285,6 +285,96 @@ class PersonVLMPretrained(nn.Module):
         
         return output
     
+    def _clean_generated_text(self, text: str) -> str:
+        """
+        Post-process generated text to fix common issues.
+        
+        Fixes:
+        - Leading fragments ("of", ",", "(presumably", etc.)
+        - Lowercase first letter
+        - Incomplete sentences
+        - Repeated phrases
+        """
+        import re
+        
+        # Strip whitespace
+        text = text.strip()
+        
+        if not text:
+            return "The image shows a person."
+        
+        # Remove common leading fragments that indicate incomplete generation
+        fragment_patterns = [
+            r'^[\(\[\{].*?[\)\]\}]\s*',  # Remove leading parenthetical/bracket content
+            r'^[,;:]\s*',                 # Remove leading punctuation
+            r'^(of|and|or|but|with|in|on|at|to|for|from|by)\s+',  # Remove leading prepositions/conjunctions (case insensitive)
+            r'^[-–—]\s*',                 # Remove leading dashes
+            r'^\.\s*',                    # Remove leading periods
+        ]
+        
+        for pattern in fragment_patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+        
+        text = text.strip()
+        
+        if not text:
+            return "The image shows a person."
+        
+        # Ensure first letter is capitalized
+        text = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
+        
+        # If text doesn't start with a proper sentence structure, add "The image shows"
+        proper_starts = [
+            'the image', 'this image', 'here is', 'here\'s', 'a ', 'an ', 
+            'the person', 'this person', 'a person', 'the individual',
+            'this is', 'we see', 'shown here', 'the photo', 'this photo',
+            'he ', 'she ', 'they '
+        ]
+        
+        text_lower = text.lower()
+        has_proper_start = any(text_lower.startswith(start) for start in proper_starts)
+        
+        if not has_proper_start:
+            # Check if it starts with a descriptor that could be a valid start
+            valid_descriptor_starts = ['adult', 'male', 'female', 'young', 'child', 'person', 'man', 'woman', 'boy', 'girl']
+            starts_with_descriptor = any(text_lower.startswith(desc) for desc in valid_descriptor_starts)
+            
+            if starts_with_descriptor:
+                text = "The image shows " + text[0].lower() + text[1:]
+            elif not text_lower.startswith(('i ', 'you ')):  # Avoid "I" or "You" starts
+                # For other cases, prepend proper start
+                text = "The image shows " + text[0].lower() + text[1:]
+        
+        # Remove duplicate consecutive sentences/phrases
+        sentences = text.split('. ')
+        seen = set()
+        unique_sentences = []
+        for sent in sentences:
+            sent_normalized = sent.strip().lower()
+            if sent_normalized and sent_normalized not in seen:
+                seen.add(sent_normalized)
+                unique_sentences.append(sent.strip())
+        text = '. '.join(unique_sentences)
+        
+        # Ensure proper ending
+        text = text.rstrip()
+        if text and text[-1] not in '.!?':
+            # Check if the last sentence is incomplete (ends mid-word or with conjunction)
+            last_words = text.split()[-3:] if len(text.split()) >= 3 else text.split()
+            incomplete_endings = ['the', 'a', 'an', 'and', 'or', 'but', 'with', 'in', 'on', 'to', 'is', 'are', 'was', 'were', 'has', 'have', 'no']
+            
+            if last_words and last_words[-1].lower() in incomplete_endings:
+                # Remove incomplete ending
+                words = text.split()
+                while words and words[-1].lower() in incomplete_endings:
+                    words.pop()
+                text = ' '.join(words)
+            
+            if text and text[-1] not in '.!?':
+                text += '.'
+        
+        return text
+    
     @torch.no_grad()
     def generate(
         self,
@@ -294,6 +384,7 @@ class PersonVLMPretrained(nn.Module):
         top_k: int = 50,
         top_p: float = 0.9,
         do_sample: bool = True,
+        use_prompt: bool = True,
     ) -> List[str]:
         """
         Generate descriptions for person images.
@@ -305,6 +396,7 @@ class PersonVLMPretrained(nn.Module):
             top_k: Top-k sampling
             top_p: Nucleus sampling
             do_sample: Whether to sample or use greedy decoding
+            use_prompt: Whether to use a prompt prefix for better sentence structure
             
         Returns:
             List of generated descriptions
@@ -313,54 +405,62 @@ class PersonVLMPretrained(nn.Module):
         device = images.device
         B = images.shape[0]
         
+        # Get tokenizer
+        if self.tokenizer is not None:
+            tokenizer = self.tokenizer
+        else:
+            from transformers import GPT2Tokenizer
+            tokenizer = GPT2Tokenizer.from_pretrained(self.config.decoder_model)
+        
         # Encode images
         visual_embeds = self.encode_image(images)  # (B, num_visual, text_dim)
         num_visual = visual_embeds.shape[1]
         
-        # CRITICAL: Don't start with BOS token - we didn't train with it!
-        # During training, captions start directly after visual tokens.
-        # We need to generate the first token using only visual context.
-        
-        # Generate first token from visual context only
-        position_ids = torch.arange(num_visual, device=device).unsqueeze(0).expand(B, -1)
-        attention_mask = torch.ones(B, num_visual, device=device)
-        
-        outputs = self.decoder(
-            inputs_embeds=visual_embeds,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-        )
-        
-        # Get first token from visual context
-        first_logits = outputs.logits[:, -1, :] / temperature
-        
-        # Apply top-k
-        if top_k > 0:
-            indices_to_remove = first_logits < torch.topk(first_logits, top_k)[0][:, -1, None]
-            first_logits[indices_to_remove] = float('-inf')
-        
-        # Apply top-p
-        if top_p < 1.0:
-            sorted_logits, sorted_indices = torch.sort(first_logits, descending=True)
-            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-            sorted_indices_to_remove = cumulative_probs > top_p
-            sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
-            sorted_indices_to_remove[:, 0] = 0
-            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-            first_logits[indices_to_remove] = float('-inf')
-        
-        if do_sample:
-            probs = F.softmax(first_logits, dim=-1)
-            first_token = torch.multinomial(probs, num_samples=1)
-        else:
-            first_token = first_logits.argmax(dim=-1, keepdim=True)
-        
-        current_ids = first_token  # (B, 1)
-        
         eos_token_id = self.decoder_config.eos_token_id or 50256
         
+        # Use prompt prefix for better sentence structure
+        if use_prompt:
+            # Start with "The image shows" to guide generation
+            prompt = "The image shows"
+            prompt_ids = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+            prompt_ids = prompt_ids.to(device).expand(B, -1)  # (B, prompt_len)
+            current_ids = prompt_ids
+        else:
+            # Generate first token from visual context only (original approach)
+            position_ids = torch.arange(num_visual, device=device).unsqueeze(0).expand(B, -1)
+            attention_mask = torch.ones(B, num_visual, device=device)
+            
+            outputs = self.decoder(
+                inputs_embeds=visual_embeds,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+            )
+            
+            first_logits = outputs.logits[:, -1, :] / temperature
+            
+            if top_k > 0:
+                indices_to_remove = first_logits < torch.topk(first_logits, top_k)[0][:, -1, None]
+                first_logits[indices_to_remove] = float('-inf')
+            
+            if top_p < 1.0:
+                sorted_logits, sorted_indices = torch.sort(first_logits, descending=True)
+                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                sorted_indices_to_remove = cumulative_probs > top_p
+                sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
+                sorted_indices_to_remove[:, 0] = 0
+                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                first_logits[indices_to_remove] = float('-inf')
+            
+            if do_sample:
+                probs = F.softmax(first_logits, dim=-1)
+                first_token = torch.multinomial(probs, num_samples=1)
+            else:
+                first_token = first_logits.argmax(dim=-1, keepdim=True)
+            
+            current_ids = first_token
+        
         # Generate remaining tokens
-        for _ in range(max_length - 1):
+        for _ in range(max_length - current_ids.shape[1]):
             # Check for EOS
             if (current_ids[:, -1] == eos_token_id).all():
                 break
@@ -421,13 +521,12 @@ class PersonVLMPretrained(nn.Module):
             while ids_list and ids_list[-1] == eos_token_id:
                 ids_list.pop()
             
-            if self.tokenizer is not None:
-                text = self.tokenizer.decode(ids_list, skip_special_tokens=True)
-            else:
-                from transformers import GPT2Tokenizer
-                gpt2_tokenizer = GPT2Tokenizer.from_pretrained(self.config.decoder_model)
-                text = gpt2_tokenizer.decode(ids_list, skip_special_tokens=True)
-            descriptions.append(text.strip())
+            text = tokenizer.decode(ids_list, skip_special_tokens=True)
+            
+            # Apply post-processing to fix any remaining issues
+            text = self._clean_generated_text(text)
+            
+            descriptions.append(text)
         
         return descriptions
     

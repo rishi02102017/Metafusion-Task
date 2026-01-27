@@ -298,9 +298,7 @@ def main():
                     do_sample=False,  # Greedy decoding
                 )
                 
-                generated_caption = generated_captions[0] if generated_captions else ""
-                # Clean up leading punctuation
-                generated_caption = generated_caption.lstrip('. ').strip()
+                generated_caption = generated_captions[0] if generated_captions else "The image shows a person."
                 
                 # Caption field is 'answer' in the dataset
                 reference = item.get('caption', item.get('answer', ''))

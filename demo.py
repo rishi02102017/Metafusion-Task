@@ -150,9 +150,7 @@ def run_inference(model, image_path, transform, device, model_type='pretrained')
                 top_p=0.9,
                 do_sample=True,
             )
-            description = descriptions[0] if descriptions else ""
-            # Clean up
-            description = description.lstrip('. ').strip()
+            description = descriptions[0] if descriptions else "The image shows a person."
         else:
             # Baseline model
             description = model.generate(
