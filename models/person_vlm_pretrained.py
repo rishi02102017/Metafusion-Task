@@ -429,7 +429,9 @@ class PersonVLMPretrained(nn.Module):
                     'may', 'can', 'will', 'shall', 'should', 'must', 'not', 'also',
                     'very', 'quite', 'rather', 'somewhat', 'wearing', 'carrying',
                     'holding', 'kind', 'type', 'sort', 'image', 'quality', 'there',
-                    'here', 'visible', 'resolution', 'background', 'activity'
+                    'here', 'visible', 'resolution', 'background', 'activity',
+                    'read', 'say', 'says', 'contain', 'contains', 'show', 'shows',
+                    'possibly', 'probably', 'likely', 'perhaps', 'maybe'
                 ]
                 
                 while words and words[-1].lower().rstrip('.,!?') in incomplete_endings:
@@ -464,7 +466,19 @@ class PersonVLMPretrained(nn.Module):
                 if idx != -1:
                     text = text[:idx] + text[idx+1:]
         
-        # Clean up spaces after paren removal
+        # Fix unbalanced quotation marks - just close them
+        if text.count('"') % 2 != 0:
+            # Add closing quote before the final punctuation
+            if text.endswith('.'):
+                text = text[:-1] + '".'
+            elif text.endswith('!'):
+                text = text[:-1] + '"!'
+            elif text.endswith('?'):
+                text = text[:-1] + '"?'
+            else:
+                text = text + '"'
+        
+        # Clean up spaces after removal
         text = re.sub(r'\s+', ' ', text).strip()
         
         # Remove sentences that are too short or are known fragments
